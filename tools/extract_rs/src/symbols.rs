@@ -51,6 +51,11 @@ pub const STRUCT_FIELDS: &[(&str, &[(&str, &str)])] = &[
             ("waiter_pi_tree", "pi_tree"),
             ("waiter_task", "task"),
             ("waiter_lock", "lock"),
+            // 5.10 has no wake_state/ww_ctx: prio sits at +0x40. 6.1 adds
+            // wake_state at +0x40, moving prio to +0x44. 6.6 refactored the
+            // waiter to rt_waiter_node (no top-level prio), so this resolves
+            // to None there; the compact branch is not used on 6.6.
+            ("waiter_prio", "prio"),
             ("waiter_wake_state", "wake_state"),
             ("waiter_ww_ctx", "ww_ctx"),
             ("waiter_tree", "tree_entry"),

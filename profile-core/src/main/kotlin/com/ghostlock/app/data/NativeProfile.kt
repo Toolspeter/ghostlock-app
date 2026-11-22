@@ -28,6 +28,7 @@ data class NativeProfileDocument(
     val kernelPhysLoad: ULong?,
     val kernelPhysOffset: ULong?,
     val compactWaiter: UByte?,
+    val waiterPrio: UInt?,
     val kernelsnitchCollisions: UInt?,
     val mmStructSz: UInt?,
     val execution: ExecutionTuning,
@@ -210,6 +211,7 @@ data class NativeProfileDocument(
             kernelPhysLoad?.let { add("kernel_phys_load" to it) }
             kernelPhysOffset?.let { add("kernel_phys_offset" to it) }
             compactWaiter?.let { add("compact_waiter" to it.toULong()) }
+            waiterPrio?.let { add("waiter_prio" to it.toULong()) }
             kernelsnitchCollisions?.let { add("kernelsnitch_collisions" to it.toULong()) }
             mmStructSz?.let { add("mm_struct_sz" to it.toULong()) }
         }
@@ -404,6 +406,7 @@ data class NativeProfileDocument(
                 kernelPhysLoad = vulOrNull("kernel_phys_load"),
                 kernelPhysOffset = vulOrNull("kernel_phys_offset"),
                 compactWaiter = vbOrNull("compact_waiter"),
+                waiterPrio = vuOrNull("waiter_prio"),
                 kernelsnitchCollisions = vuOrNull("kernelsnitch.collisions"),
                 mmStructSz = vuOrNull("kernelsnitch.mm_struct_sz"),
                 execution = ExecutionTuning(
@@ -452,6 +455,7 @@ data class NativeProfileDocument(
             private var kernelPhysLoad: ULong? = null
             private var kernelPhysOffset: ULong? = null
             private var compactWaiter: UByte? = null
+            private var waiterPrio: UInt? = null
             private var kernelsnitchCollisions: UInt? = null
             private var mmStructSz: UInt? = null
             private var execution = ExecutionTuning()
@@ -526,6 +530,7 @@ data class NativeProfileDocument(
                         "kernel_phys_load" -> kernelPhysLoad = raw
                         "kernel_phys_offset" -> kernelPhysOffset = raw
                         "compact_waiter" -> compactWaiter = raw.toUByte()
+                        "waiter_prio" -> waiterPrio = raw.toUInt()
                         "kernelsnitch_collisions" -> kernelsnitchCollisions = raw.toUInt()
                         "mm_struct_sz" -> mmStructSz = raw.toUInt()
                     }
@@ -612,6 +617,7 @@ data class NativeProfileDocument(
                 kernelPhysLoad = kernelPhysLoad,
                 kernelPhysOffset = kernelPhysOffset,
                 compactWaiter = compactWaiter,
+                waiterPrio = waiterPrio,
                 kernelsnitchCollisions = kernelsnitchCollisions,
                 mmStructSz = mmStructSz,
                 execution = execution,

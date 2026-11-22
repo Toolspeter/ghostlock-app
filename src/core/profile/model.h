@@ -116,6 +116,11 @@ namespace ghostlock::profile {
          * override it without a rebuild. */
         std::optional<uint64_t> kernel_phys_offset;
         std::optional<uint8_t> compact_waiter;
+        /* BTF-derived rt_mutex_waiter.prio offset (64 on 5.10, 68 on 6.1).
+         * Absence falls back to the 6.1 compact layout (prio at +0x44). On
+         * 6.6 the waiter has no top-level prio (rt_waiter_node) and the
+         * compact branch is not used. */
+        std::optional<uint32_t> waiter_prio;
         std::optional<uint32_t> kernelsnitch_collisions;
         std::optional<uint32_t> mm_struct_sz;
     };

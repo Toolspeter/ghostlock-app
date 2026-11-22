@@ -51,6 +51,13 @@ class ProfileResolverTest {
     }
 
     @Test
+    fun `waiter prio is a known top level key and resolves directly`() {
+        val profile = validProfile() + ("waiter_prio" to 64L)
+        assertTrue(ProfileResolver.validateMerged(profile, "select_stack", "none").none { it.fieldPath == "waiter_prio" })
+        assertEquals(64L, ProfileResolver.nativeValue(profile, "select_stack", "none", "waiter_prio"))
+    }
+
+    @Test
     fun `validateMerged rejects a missing required task field`() {
         val profile = validProfile()
         profile["task_struct"].asValueMap()!!.remove("prio")

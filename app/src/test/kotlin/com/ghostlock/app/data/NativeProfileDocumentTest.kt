@@ -145,6 +145,22 @@ class NativeProfileDocumentTest {
     }
 
     @Test
+    fun `waiter prio round trips through the kernel section`() {
+        val bytes = doc(
+            "select_stack",
+            mapOf("waiter_prio" to 64L),
+        ).toBinary()
+        assertEquals(64L, entriesOf(bytes, "kernel").toMap()["waiter_prio"])
+        val decoded = NativeProfileDocument.fromBinary(bytes)!!
+        assertEquals(64u, decoded.waiterPrio)
+
+        /* Absent means "use the 6.1 compact layout": no key, null value. */
+        val absent = doc("select_stack").toBinary()
+        assertTrue(entriesOf(absent, "kernel").isEmpty())
+        assertNull(NativeProfileDocument.fromBinary(absent)!!.waiterPrio)
+    }
+
+    @Test
     fun `signed values keep their two's complement bits`() {
         val bytes = doc("select_stack", mapOf("pselect_waiter_shift" to -2L)).toBinary()
         assertEquals(-2L, entriesOf(bytes, "route.select_stack").toMap()["waiter_shift"]!!)

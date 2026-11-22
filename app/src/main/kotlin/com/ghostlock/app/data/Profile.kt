@@ -43,6 +43,9 @@ internal data class Profile(
             ?: MulticastGeometry(null, null, null, null)
     val execution: ExecutionTuning get() = document.execution
     val compactWaiter: Boolean get() = (document.compactWaiter?.toInt() ?: 0) != 0
+    /** BTF-derived rt_mutex_waiter.prio offset (64 on 5.10, 68 on 6.1); null
+     * means "use the 6.1 compact layout" (the native fallback). */
+    val waiterPrio: UInt? get() = document.waiterPrio
     val pselectWaiterShift: Int?
         get() = (document.routeConfig as? SelectConfig)?.waiterShift
     val mmStructSz: UInt? get() = document.mmStructSz

@@ -12,7 +12,8 @@ object ProfileResolver {
     private val KnownTopLevel = setOf(
         "release", "schema_version", "kernel_major", "recommend_shizuku",
         "route", "fallback", "kernelsnitch", "task_struct", "cred", "offset",
-        "kernel_phys_load", "kernel_phys_offset", "execution",
+        "kernel_phys_load", "kernel_phys_offset", "compact_waiter", "waiter_prio",
+        "execution",
     )
     private val RequiredTopLevel = setOf(
         "release", "schema_version", "kernel_major", "route", "task_struct", "cred", "offset",

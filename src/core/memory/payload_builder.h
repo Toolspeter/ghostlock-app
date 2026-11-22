@@ -48,12 +48,23 @@ namespace ghostlock::memory {
 
     /* Fixed payload fragment sizes shared by the encoders and their callers. */
     inline constexpr std::size_t kCompactWaiterBytes = 0x30;
+    /* Bytes of the waiter the compact tail encoder may touch (through ww_ctx). */
+    inline constexpr std::size_t kCompactWaiterTailBytes = 0x58;
 
     /* Bounds-checked encoders. They return false without modifying memory when
  * the destination cannot contain every field required by the layout. */
     [[nodiscard]] bool encode_compact_waiter(
         std::span<std::byte> waiter, const WriteRequest &request,
         const PayloadWriteLayout &layout) noexcept;
+
+    /* Compact-waiter tail fields (wake_state/prio/deadline/ww_ctx).
+     * `prio_offset` is the BTF-derived rt_mutex_waiter.prio offset (64 on
+     * 5.10, 68 on 6.1). When it is 0x40 the waiter has no wake_state/ww_ctx,
+     * so prio is written at +0x40 and those writes are skipped; otherwise the
+     * 6.1 layout is written (wake_state 0 at +0x40, prio at +0x44, deadline
+     * 0 at +0x48, ww_ctx 0 at +0x50). Deadline is always written at +0x48. */
+    [[nodiscard]] bool encode_compact_waiter_tail(
+        std::span<std::byte> waiter, uint32_t prio_offset, int32_t prio) noexcept;
 
     [[nodiscard]] bool encode_multicast_waiter(
         std::span<std::byte> buffer, std::size_t waiter_offset,

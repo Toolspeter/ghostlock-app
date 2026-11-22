@@ -324,6 +324,14 @@ pub fn render_conf(input: &ConfInputs<'_>) -> String {
         Some(offset) => format!("kernel_phys_offset = {offset}"),
         None => "kernel_phys_offset = null".to_string(),
     });
+    // BTF-derived rt_mutex_waiter.prio offset (64 on 5.10, 68 on 6.1; absent
+    // where the waiter has no top-level prio, e.g. 6.6 rt_waiter_node).
+    // Top-level so Kotlin reads it via nativeValue("waiter_prio"). Omitted
+    // when unresolved, like other fields without a derived value; absence
+    // means "use the 6.1 compact layout" (the native fallback).
+    if let Some(prio) = input.structs.get("waiter_prio").copied().flatten() {
+        lines.push(format!("waiter_prio = {prio}"));
+    }
     if let Some(route) = input.route {
         // The chosen route keeps its whole field universe even when no
         // geometry could be derived, so the import carries the recommendation
@@ -450,9 +458,11 @@ pub fn optional_symbols() -> BTreeSet<&'static str> {
 }
 
 /// BTF struct fields a kernel may legitimately lack: the 5.15 GKI BTF has no
-/// `slab` type, so `struct_slab_cache` is missing there. Reported as missing,
-/// but not failing the extract.
-const OPTIONAL_STRUCT_FIELDS: &[&str] = &["struct_slab_cache"];
+/// `slab` type, so `struct_slab_cache` is missing there; 6.6 refactored
+/// `rt_mutex_waiter` to `rt_waiter_node`, so it has no top-level `prio`
+/// field and `waiter_prio` is missing there. Reported as missing, but not
+/// failing the extract.
+const OPTIONAL_STRUCT_FIELDS: &[&str] = &["struct_slab_cache", "waiter_prio"];
 
 pub fn optional_struct_fields() -> BTreeSet<&'static str> {
     OPTIONAL_STRUCT_FIELDS.iter().copied().collect()
@@ -532,6 +542,67 @@ mod tests {
         assert!(out.contains("tcp_zerocopy {\n    compact_waiter = 1"));
         assert!(out.contains("mm_struct_sz = 1024"));
         assert!(out.contains("kernel_phys_load = null"));
+    }
+
+    #[test]
+    fn conf_waiter_prio_follows_btf() {
+        // 5.10: no wake_state/ww_ctx, prio at +0x40.
+        let (symbols, mut structs) = conf_fixture();
+        structs.insert("waiter_prio".to_string(), Some(64));
+        let out = render_conf(&ConfInputs {
+            release: "5.10.209-android12-9-00019-g4ea09a298bb4-ab12292661",
+            phys: Some(0x4000_0000),
+            phys_offset: Some(0x4000_0000),
+            symbols: &symbols,
+            structs: &structs,
+            route: Some("select_stack"),
+            route_geometry: &[("waiter_shift", -2)],
+            cred: &conf_cred_5x(
+                &Cred5x {
+                    caps_offset: 48,
+                    caps_count: 3,
+                    caps_value: 0x1ffffffffff,
+                    refs: vec![],
+                },
+                168,
+            ),
+            extra_offsets: &no_extra_offsets(),
+        });
+        assert!(out.contains("waiter_prio = 64"));
+        assert!(out.contains("select_stack {\n    waiter_shift = -2"));
+
+        // 6.1: wake_state at +0x40 moves prio to +0x44.
+        let (symbols, mut structs) = conf_fixture();
+        structs.insert("waiter_prio".to_string(), Some(68));
+        let out = render_conf(&ConfInputs {
+            release: "6.1.118-android14-11-gca0ef6d17716-ab13624819",
+            phys: None,
+            phys_offset: None,
+            symbols: &symbols,
+            structs: &structs,
+            route: Some("tcp_zerocopy"),
+            route_geometry: &[("compact_waiter", 1)],
+            cred: &conf_cred_6x(),
+            extra_offsets: &no_extra_offsets(),
+        });
+        assert!(out.contains("waiter_prio = 68"));
+
+        // 6.6 has no top-level prio (rt_waiter_node); the field is omitted
+        // and the native side falls back to the 6.1 compact layout.
+        let (symbols, mut structs) = conf_fixture();
+        structs.insert("waiter_prio".to_string(), None);
+        let out = render_conf(&ConfInputs {
+            release: "6.6.89-android15-8-g0889fe95bb10-ab14402178-4k",
+            phys: None,
+            phys_offset: None,
+            symbols: &symbols,
+            structs: &structs,
+            route: Some("select_stack"),
+            route_geometry: &[("waiter_shift", -2)],
+            cred: &conf_cred_6x(),
+            extra_offsets: &no_extra_offsets(),
+        });
+        assert!(!out.contains("waiter_prio"));
     }
 
     #[test]
